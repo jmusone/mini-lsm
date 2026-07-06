@@ -35,14 +35,23 @@ pub struct BlockIterator {
     first_key: KeyVec,
 }
 
+impl Block {
+    fn get_key(&self, position: usize) -> KeyVec {
+        let offset = self.offsets[position] as usize;
+        let key_len = (&self.data[offset..]).get_u16() as usize;
+        let key = &self.data[..key_len];
+        KeyVec::from_vec(key.to_vec())
+    }
+}
+
 impl BlockIterator {
     fn new(block: Arc<Block>) -> Self {
         Self {
+            first_key: block.get_key(0),
             block,
             key: KeyVec::new(),
             value_range: (0, 0),
             idx: 0,
-            first_key: KeyVec::new(),
         }
     }
 
