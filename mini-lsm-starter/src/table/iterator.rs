@@ -34,7 +34,7 @@ impl SsTableIterator {
     pub fn create_and_seek_to_first(table: Arc<SsTable>) -> Result<Self> {
         Ok(Self {
             blk_iter: BlockIterator::create_and_seek_to_first(table.read_block(0)?),
-            table: table,
+            table,
             blk_idx: 0,
         })
     }
@@ -58,8 +58,8 @@ impl SsTableIterator {
             }
         }
         Ok(Self {
-            table: table,
-            blk_iter: blk_iter,
+            table,
+            blk_iter,
             blk_idx: idx,
         })
     }

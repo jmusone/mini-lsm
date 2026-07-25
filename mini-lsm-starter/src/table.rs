@@ -51,7 +51,7 @@ impl BlockMeta {
     pub fn encode_block_meta(block_meta: &[BlockMeta], buf: &mut Vec<u8>) {
         let mut estimated_size = 0;
         for meta in block_meta {
-            estimated_size += std::mem::size_of::<usize>()
+            estimated_size += std::mem::size_of::<u32>()
                 + (2 * std::mem::size_of::<u16>())
                 + meta.first_key.len()
                 + meta.last_key.len();
@@ -62,7 +62,7 @@ impl BlockMeta {
             buf.put_u32(meta.offset.try_into().unwrap());
             buf.put_u16(meta.first_key.len() as u16);
             buf.put_slice(meta.first_key.raw_ref());
-            buf.put_u32(meta.last_key.len() as u32);
+            buf.put_u16(meta.last_key.len() as u16);
             buf.put_slice(meta.last_key.raw_ref());
         }
     }
@@ -76,11 +76,11 @@ impl BlockMeta {
             let first_key_len = buf.get_u16();
             let first_key = KeyBytes::from_bytes(buf.copy_to_bytes(first_key_len as usize));
             let last_key_len = buf.get_u16();
-            let last_key = KeyBytes::from_bytes(buf.copy_to_bytes(first_key_len as usize));
+            let last_key = KeyBytes::from_bytes(buf.copy_to_bytes(last_key_len as usize));
             data.push(BlockMeta {
-                offset: offset,
-                first_key: first_key,
-                last_key: last_key,
+                offset,
+                first_key,
+                last_key,
             })
         }
         data
@@ -153,12 +153,12 @@ impl SsTable {
         let raw = file.read(blk_meta_offset, len - 4 - blk_meta_offset)?;
         let meta = BlockMeta::decode_block_meta(&raw[..]);
         Ok(Self {
-            file: file,
+            file,
             first_key: meta.first().unwrap().first_key.clone(),
             last_key: meta.last().unwrap().last_key.clone(),
             block_meta: meta,
             block_meta_offset: blk_meta_offset as usize,
-            id: id,
+            id,
             block_cache: None,
             bloom: None,
             max_ts: 0,
@@ -188,9 +188,13 @@ impl SsTable {
     /// Read a block from the disk.
     pub fn read_block(&self, block_idx: usize) -> Result<Arc<Block>> {
         let offset = self.block_meta[block_idx].offset;
-        let offset_end = self.block_meta.get(block_idx + 1).map_or(0, |x| x.offset);
+        let offset_end = self
+            .block_meta
+            .get(block_idx + 1)
+            .map_or(self.block_meta_offset, |x| x.offset);
         let len = offset_end - offset;
-        let blk = Block::decode(self.file.read(offset as u64, len as u64)?.as_slice());
+        let data = self.file.read(offset as u64, len as u64)?;
+        let blk = Block::decode(&data[..]);
         Ok(Arc::new(blk))
     }
 
