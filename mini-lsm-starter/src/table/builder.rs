@@ -22,6 +22,7 @@ use super::{BlockMeta, FileObject, SsTable};
 use crate::key::KeyVec;
 use crate::{block::BlockBuilder, key::KeySlice, lsm_storage::BlockCache};
 use anyhow::Result;
+use bytes::BufMut;
 
 /// Builds an SSTable from key-value pairs.
 pub struct SsTableBuilder {
@@ -99,6 +100,10 @@ impl SsTableBuilder {
         let builder = std::mem::replace(&mut self.builder, BlockBuilder::new(self.block_size));
         let encoded = builder.build().encode();
         self.data.extend(encoded);
+
+        let meta_offset = self.data.len();
+        BlockMeta::encode_block_meta(&self.meta, &mut self.data);
+        self.data.put_u32(meta_offset as u32);
 
         let file = FileObject::create(path.as_ref(), self.data)?;
         Ok(SsTable {
