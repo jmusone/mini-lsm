@@ -24,7 +24,7 @@ use super::StorageIterator;
 pub struct TwoMergeIterator<A: StorageIterator, B: StorageIterator> {
     a: A,
     b: B,
-    // Add fields as need
+    first_iterator_has_precedence: bool,
 }
 
 impl<
@@ -33,7 +33,34 @@ impl<
 > TwoMergeIterator<A, B>
 {
     pub fn create(a: A, b: B) -> Result<Self> {
-        unimplemented!()
+        let mut iter = Self { a, b, first_iterator_has_precedence: true };
+        iter.skip_outdated()?;
+        iter.set_next_read()?;
+        Ok(iter)
+    }
+
+    fn skip_outdated(&mut self) -> Result<()> {
+        if self.a.is_valid() && self.b.is_valid()  && self.a.key() == self.b.key() {
+            self.b.next()?;
+        }
+        Ok(())
+    }
+
+    fn set_next_read(&mut self) -> Result<()> {
+        if !self.a.is_valid() {
+            self.first_iterator_has_precedence = false;
+            return Ok(());
+        }
+
+        if !self.b.is_valid() {
+            self.first_iterator_has_precedence = true;
+            return Ok(());
+        }
+
+        if self.b.key() < self.a.key() {
+            self.first_iterator_has_precedence = false;
+        }
+        Ok(())
     }
 }
 
@@ -45,18 +72,34 @@ impl<
     type KeyType<'a> = A::KeyType<'a>;
 
     fn key(&self) -> Self::KeyType<'_> {
-        unimplemented!()
+        if self.first_iterator_has_precedence {
+            return self.a.key();
+        }
+        self.b.key()
     }
 
     fn value(&self) -> &[u8] {
-        unimplemented!()
+        if self.first_iterator_has_precedence {
+            return self.a.value();
+        }
+        self.b.value()
     }
 
     fn is_valid(&self) -> bool {
-        unimplemented!()
+        if self.first_iterator_has_precedence {
+            return self.a.is_valid();
+        }
+        self.b.is_valid()
     }
 
     fn next(&mut self) -> Result<()> {
-        unimplemented!()
+        if self.first_iterator_has_precedence {
+            self.a.next()?;
+        } else {
+            self.b.next()?;
+        }
+        self.skip_outdated()?;
+        self.set_next_read()?;
+        Ok(())
     }
 }
